@@ -15,15 +15,25 @@ init_session_state()
 ss = st.session_state
 
 buckets = get_active_buckets(ss.bucket_count)
-players = {b["id"]: ss[f"{b['id']}_players"] for b in buckets}
-spends  = {b["id"]: ss[f"{b['id']}_spend"]   for b in buckets}
+players = {
+    b["id"]: ss[f"{b['id']}_players_inp"] if f"{b['id']}_players_inp" in ss else ss[f"{b['id']}_players"]
+    for b in buckets
+}
+spends = {
+    b["id"]: ss[f"{b['id']}_spend_inp"] if f"{b['id']}_spend_inp" in ss else ss[f"{b['id']}_spend"]
+    for b in buckets
+}
 derived, total_pool = compute_derived(players, spends, ss.exp_rate, ss.base_exp, ss.gamma, buckets)
 total_players = sum(players.values())
 total_money = compute_total_money(players, spends, buckets)
 
+if "prize_num_prizes" not in ss:
+    ss.prize_num_prizes = max(3, total_money // ss.prize_increment) if total_money > 0 else 3
+    ss.prize_num_prizes_inp = ss.prize_num_prizes
+
 
 def handle_run_draw():
-    ss.draw = run_draw(derived, ss.num_prizes, buckets)
+    ss.draw = run_draw(derived, ss.prize_num_prizes, buckets)
 
 
 render_header()

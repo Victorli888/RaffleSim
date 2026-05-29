@@ -1,6 +1,6 @@
 MIN_BUCKETS = 3
 MAX_BUCKETS = 10
-DEFAULT_TOTAL_PLAYERS = 5000
+DEFAULT_TOTAL_PLAYERS = 500
 
 BUCKET_CATALOG = [
     {"id": "shrimp",    "name": "Shrimp",    "range": "Micro spend",     "bg": "#F9E8E8", "tx": "#6B2020", "ac": "#D44A4A"},
@@ -17,16 +17,16 @@ BUCKET_CATALOG = [
 
 # Default avg spend per player ($) by bucket id
 DEFAULT_SPEND = {
-    "shrimp":    15,
-    "guppy":     35,
-    "minnow":    65,
-    "perch":    120,
-    "bass":     200,
-    "tuna":     260,
-    "marlin":   450,
-    "swordfish": 700,
-    "shark":   1100,
-    "whale":   1450,
+    "shrimp":      50,
+    "guppy":      100,
+    "minnow":     150,
+    "perch":      200,
+    "bass":       300,
+    "tuna":       400,
+    "marlin":     600,
+    "swordfish": 1000,
+    "shark":     2000,
+    "whale":     4000,
 }
 
 # Player share (%) per active bucket, low → high spend; must sum to 100
@@ -38,7 +38,7 @@ PLAYER_SHARE_BY_COUNT: dict[int, list[int]] = {
     7:  [30, 22, 16, 12,  9,  6,  5],    # Shrimp, Minnow, Perch, Bass, Marlin, Shark, Whale
     8:  [25, 18, 15, 12, 10,  8,  7,  5],
     9:  [22, 16, 14, 12, 10,  9,  8,  5,  4],
-    10: [20, 14, 12, 11, 10,  9,  8,  7,  5,  4],
+    10: [30, 20, 15, 10,  8,  6,  4,  3.6, 2,  1.4],
 }
 
 # Legacy: (players, spend) — players are overridden by distribute_players()

@@ -17,7 +17,7 @@ def init_session_state():
     if "num_prizes" not in ss:
         ss.num_prizes = 8
     if "gamma" not in ss:
-        ss.gamma = 1.5
+        ss.gamma = 0.5
     if "exp_rate" not in ss:
         ss.exp_rate = 10
     if "base_exp" not in ss:
@@ -31,9 +31,6 @@ def init_session_state():
     if "prize_increment" not in ss:
         ss.prize_increment = 500
         ss.prize_increment_inp = 500
-    if "prize_num_prizes" not in ss:
-        ss.prize_num_prizes = 3
-        ss.prize_num_prizes_inp = 3
     if "players_initialized" not in ss:
         apply_default_player_distribution(ss)
         ss.players_initialized = True
@@ -63,7 +60,9 @@ def _render_bucket(ss, derived, b, compact: bool = False):
         f'    width:7px;height:7px;border-radius:50%;background:{b["ac"]};'
         f'    display:inline-block"></span></span>'
         f'  <span class="bk-name" style="color:{b["tx"]}">{b["name"]}</span>'
-        f'  <span class="bk-range" style="color:{b["tx"]};opacity:.8">{b["range"]}</span>'
+        f'  <span style="margin-left:auto">'
+        f'    <span style="color:{b["ac"]};font-size:12px;font-weight:700;opacity:.9">reaches Lv.&nbsp;{d["per"]}</span>'
+        f'  </span>'
         f'</div>'
     )
     st.markdown(f'<div class="bucket">{ring_html}</div>', unsafe_allow_html=True)
@@ -167,7 +166,7 @@ def render_left_panel(ss, derived, on_run_draw, buckets):
 
     compact = len(buckets) > 5
     if compact:
-        mid = (len(buckets) + 1) // 2
+        mid = 5
         grid_left, grid_right = st.columns(2)
         with grid_left:
             for b in buckets[:mid]:
@@ -196,7 +195,7 @@ def render_left_panel(ss, derived, on_run_draw, buckets):
     if draw is None:
         st.markdown(
             f'<p style="color:#5e5e5e;font-size:14px;margin-top:12px">'
-            f'Hit "Run draw" to simulate {fmt(ss.num_prizes)} prize{"s" if ss.num_prizes != 1 else ""}.'
+            f'Hit "Run draw" to simulate {fmt(ss.prize_num_prizes)} prize{"s" if ss.prize_num_prizes != 1 else ""}.'
             f'</p>',
             unsafe_allow_html=True,
         )
@@ -205,15 +204,28 @@ def render_left_panel(ss, derived, on_run_draw, buckets):
         for bid in draw:
             tally[bid] += 1
 
-        bucket_map = {b["id"]: b for b in buckets}
-        chips = "".join(
-            f'<div class="prize-chip" style="border-left-color:{bucket_map[bid]["ac"]}">'
-            f'  <span class="prize-n">Prize {i+1}</span>'
-            f'  <span class="prize-win" style="color:{bucket_map[bid]["ac"]}">{bucket_map[bid]["name"]}</span>'
-            f'</div>'
-            for i, bid in enumerate(draw)
+        rows = "".join(
+            f'<tr>'
+            f'  <td style="display:flex;align-items:center;gap:8px;padding:7px 0">'
+            f'    <span style="width:9px;height:9px;border-radius:50%;background:{b["ac"]};flex-shrink:0;display:inline-block"></span>'
+            f'    <span style="color:#aeaeae;font-size:13px">{b["name"]}</span>'
+            f'  </td>'
+            f'  <td style="text-align:right;padding:7px 0;font-size:14px;font-weight:700;color:{b["ac"]}">'
+            f'    {tally[b["id"]]}'
+            f'  </td>'
+            f'</tr>'
+            for b in buckets if tally[b["id"]] > 0
         )
-        st.markdown(f'<div class="prize-grid">{chips}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<table style="width:100%;border-collapse:collapse;margin-top:10px">'
+            f'  <thead><tr>'
+            f'    <th style="text-align:left;font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5e5e5e;padding-bottom:6px">Bucket</th>'
+            f'    <th style="text-align:right;font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5e5e5e;padding-bottom:6px">Number Of Winners</th>'
+            f'  </tr></thead>'
+            f'  <tbody style="border-top:1px solid #2c2c2c">{rows}</tbody>'
+            f'</table>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -226,13 +238,13 @@ def _slider_label_style(active: str, name: str) -> str:
 
 def _sync_gamma_from_input():
     ss = st.session_state
-    ss.gamma = round(float(ss.gamma_inp), 2)
+    ss.gamma = min(1.0, round(float(ss.gamma_inp), 2))
     ss.gamma_slider = ss.gamma
 
 
 def _sync_gamma_from_slider():
     ss = st.session_state
-    ss.gamma = round(float(ss.gamma_slider), 2)
+    ss.gamma = min(1.0, round(float(ss.gamma_slider), 2))
     ss.gamma_inp = ss.gamma
 
 def _on_prize_increment_change():
@@ -277,10 +289,14 @@ def _render_prize_calculator(ss, total_money: int):
             on_change=_on_prize_num_prizes_change,
         )
 
+    raffle_revenue = ss.prize_num_prizes * ss.prize_increment
     st.markdown(
         f'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px">'
         f'  <span style="font-size:13px;color:#7d7d7d">Raffle revenue</span>'
-        f'  <span style="font-size:16px;font-weight:700;color:#ededed">${fmt(total_money)}</span>'
+        f'  <span style="font-size:13px;color:#5e5e5e;font-family:monospace">'
+        f'    {fmt(ss.prize_num_prizes)} prizes × ${fmt(ss.prize_increment)} = '
+        f'    <span style="color:#ededed;font-weight:700">${fmt(raffle_revenue)}</span>'
+        f'  </span>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -307,18 +323,14 @@ def render_right_panel(ss, total_money: int):
         st.number_input(
             "γ",
             min_value=0.0,
-            max_value=3.0,
+            max_value=1.0,
             step=0.01,
             format="%.2f",
             key="gamma_inp",
             on_change=_sync_gamma_from_input,
         )
 
-    slider_active = (
-        "Constant" if ss.gamma < 0.4 else
-        "Exponential" if ss.gamma > 2.0 else
-        "Linear"
-    )
+    slider_active = "Constant" if ss.gamma < 0.1 else "Linear"
 
     st.markdown(
         '<span style="font-size:17px;font-weight:600;color:#aeaeae">'
@@ -327,7 +339,7 @@ def render_right_panel(ss, total_money: int):
     )
 
     st.slider(
-        "γ", min_value=0.0, max_value=3.0,
+        "γ", min_value=0.0, max_value=1.0,
         step=0.01, label_visibility="collapsed", key="gamma_slider",
         on_change=_sync_gamma_from_slider,
     )
@@ -336,7 +348,6 @@ def render_right_panel(ss, total_money: int):
         f'<div style="display:flex;justify-content:space-between;margin-top:4px">'
         f'  {_slider_label_style(slider_active, "Constant")}'
         f'  {_slider_label_style(slider_active, "Linear")}'
-        f'  {_slider_label_style(slider_active, "Exponential")}'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -365,16 +376,12 @@ def render_right_panel(ss, total_money: int):
         '</div>',
         unsafe_allow_html=True,
     )
-    ec1, ec2, ec3 = st.columns(3)
+    ec1, ec2 = st.columns(2)
     with ec1:
-        ss.num_prizes = st.number_input(
-            "Prize Count", min_value=1, value=ss.num_prizes, key="prizes_input",
-        )
-    with ec2:
         ss.exp_rate = st.number_input(
             "EXP per $1", min_value=1, value=ss.exp_rate, key="exp_rate_inp"
         )
-    with ec3:
+    with ec2:
         ss.base_exp = round(st.number_input(
             "Initial EXP Threshold",
             min_value=0.01,
