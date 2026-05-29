@@ -29,8 +29,11 @@ def init_session_state():
     if "bucket_count" not in ss:
         ss.bucket_count = 3
     if "prize_increment" not in ss:
-        ss.prize_increment = 500
-        ss.prize_increment_inp = 500
+        ss.prize_increment = 1000
+    if "other_revenue" not in ss:
+        ss.other_revenue = 0
+    if "base_prizes" not in ss:
+        ss.base_prizes = 3
     if "players_initialized" not in ss:
         apply_default_player_distribution(ss)
         ss.players_initialized = True
@@ -247,56 +250,71 @@ def _sync_gamma_from_slider():
     ss.gamma = min(1.0, round(float(ss.gamma_slider), 2))
     ss.gamma_inp = ss.gamma
 
-def _on_prize_increment_change():
-    ss = st.session_state
-    total = ss.get("_prize_total_money", 0)
-    val = max(1, int(ss.prize_increment_inp))
-    ss.prize_increment = val
-    ss.prize_num_prizes = max(3, math.floor(total / val)) if val > 0 else 3
-    ss.prize_num_prizes_inp = ss.prize_num_prizes
-
-
-def _on_prize_num_prizes_change():
-    ss = st.session_state
-    total = ss.get("_prize_total_money", 0)
-    n = max(3, int(ss.prize_num_prizes_inp))
-    ss.prize_num_prizes = n
-    ss.prize_increment = max(1, round(total / n)) if n > 0 and total > 0 else ss.prize_increment
-    ss.prize_increment_inp = ss.prize_increment
-
-
 def _render_prize_calculator(ss, total_money: int):
-    ss._prize_total_money = total_money
-
-    ss.setdefault("prize_increment_inp", ss.prize_increment)
-    ss.setdefault("prize_num_prizes_inp", ss.prize_num_prizes)
-
     st.markdown('<div class="kicker" style="margin-bottom:10px">Prize Calculator</div>', unsafe_allow_html=True)
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1:
-        st.number_input(
-            "Prize Increment ($)",
-            min_value=1,
-            key="prize_increment_inp",
-            on_change=_on_prize_increment_change,
+        ss.base_prizes = st.number_input(
+            "Base Prizes", min_value=1, value=ss.base_prizes, key="base_prizes_inp",
         )
     with c2:
-        st.number_input(
-            "Number of Prizes",
-            min_value=3,
-            key="prize_num_prizes_inp",
-            on_change=_on_prize_num_prizes_change,
+        ss.prize_increment = st.number_input(
+            "Affordability Ceiling ($)", min_value=1, value=ss.prize_increment, key="prize_increment_inp",
+        )
+    with c3:
+        ss.other_revenue = st.number_input(
+            "Other Revenue ($)", min_value=0, value=ss.other_revenue, key="other_revenue_inp",
         )
 
-    raffle_revenue = ss.prize_num_prizes * ss.prize_increment
+    raffle_revenue   = total_money
+    cumulative_gmv   = raffle_revenue + ss.other_revenue
+    gmv_contribution = cumulative_gmv * 0.01
+    prize_pool       = 1_250 + gmv_contribution
+    extra_prizes     = math.floor(gmv_contribution / ss.prize_increment) if ss.prize_increment > 0 else 0
+    num_prizes       = max(ss.base_prizes, ss.base_prizes + extra_prizes)
+    ss.prize_num_prizes = num_prizes
+
+    row = "display:flex;justify-content:space-between;align-items:baseline;margin:5px 0"
+    lbl = "font-size:12px;color:#7d7d7d"
+    val = "font-size:12px;color:#5e5e5e;font-family:monospace"
+    hi  = "color:#ededed;font-weight:700"
+
     st.markdown(
-        f'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px">'
-        f'  <span style="font-size:13px;color:#7d7d7d">Raffle revenue</span>'
-        f'  <span style="font-size:13px;color:#5e5e5e;font-family:monospace">'
-        f'    {fmt(ss.prize_num_prizes)} prizes × ${fmt(ss.prize_increment)} = '
-        f'    <span style="color:#ededed;font-weight:700">${fmt(raffle_revenue)}</span>'
-        f'  </span>'
+        f'<div style="margin-top:14px">'
+
+        f'  <div style="{row}">'
+        f'    <span style="{lbl}">Raffle revenue</span>'
+        f'    <span style="{val}">${fmt(raffle_revenue)}</span>'
+        f'  </div>'
+
+        f'  <div style="{row}">'
+        f'    <span style="{lbl}">Other revenue</span>'
+        f'    <span style="{val}">+ ${fmt(ss.other_revenue)}</span>'
+        f'  </div>'
+
+        f'  <div style="border-top:1px solid #2c2c2c;margin:8px 0"></div>'
+
+        f'  <div style="{row}">'
+        f'    <span style="{lbl}">Cumulative GMV</span>'
+        f'    <span style="{val}"><span style="{hi}">${fmt(cumulative_gmv)}</span></span>'
+        f'  </div>'
+
+        f'  <div style="{row}">'
+        f'    <span style="{lbl}">1% of GMV → prize pool</span>'
+        f'    <span style="{val}">$1,250 + (${fmt(cumulative_gmv)} × 1%) = <span style="{hi}">${fmt(prize_pool)}</span></span>'
+        f'  </div>'
+
+        f'  <div style="border-top:1px solid #2c2c2c;margin:8px 0"></div>'
+
+        f'  <div style="{row}">'
+        f'    <span style="{lbl}">Prizes</span>'
+        f'    <span style="{val}">'
+        f'      {ss.base_prizes} + floor(${fmt(gmv_contribution)} / ${fmt(ss.prize_increment)}) = '
+        f'      <span style="{hi}">{num_prizes} prizes</span>'
+        f'    </span>'
+        f'  </div>'
+
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -397,11 +415,7 @@ def render_right_panel(ss, total_money: int):
 
 def render_level_table(gamma: float, base_exp: float):
     def _f(v: float) -> str:
-        if v >= 1_000_000:
-            return f"{v / 1_000_000:.2f}M"
-        if v >= 1_000:
-            return f"{v / 1_000:.1f}K"
-        return f"{v:,.1f}"
+        return f"{v:,.0f}"
 
     levels = list(range(1, 51))
     costs  = [base_exp * (n ** gamma) for n in levels]

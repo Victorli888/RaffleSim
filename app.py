@@ -1,3 +1,4 @@
+import math
 import streamlit as st
 
 from model import get_active_buckets, compute_derived, compute_total_money, run_draw
@@ -23,13 +24,17 @@ spends = {
     b["id"]: ss[f"{b['id']}_spend_inp"] if f"{b['id']}_spend_inp" in ss else ss[f"{b['id']}_spend"]
     for b in buckets
 }
-derived, total_pool = compute_derived(players, spends, ss.exp_rate, ss.base_exp, ss.gamma, buckets)
+exp_rate = ss["exp_rate_inp"] if "exp_rate_inp" in ss else ss.exp_rate
+base_exp = ss["base_exp_inp"] if "base_exp_inp" in ss else ss.base_exp
+gamma    = min(1.0, ss["gamma_inp"] if "gamma_inp" in ss else ss.gamma)
+derived, total_pool = compute_derived(players, spends, exp_rate, base_exp, gamma, buckets)
 total_players = sum(players.values())
 total_money = compute_total_money(players, spends, buckets)
 
 if "prize_num_prizes" not in ss:
-    ss.prize_num_prizes = max(3, total_money // ss.prize_increment) if total_money > 0 else 3
-    ss.prize_num_prizes_inp = ss.prize_num_prizes
+    _gmv = total_money + ss.other_revenue
+    _extra = math.floor((_gmv * 0.01) / ss.prize_increment) if ss.prize_increment > 0 else 0
+    ss.prize_num_prizes = max(ss.base_prizes, ss.base_prizes + _extra)
 
 
 def handle_run_draw():
