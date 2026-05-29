@@ -1,0 +1,463 @@
+import math
+import streamlit as st
+
+from model.constants import (
+    BUCKET_CATALOG,
+    DEFAULT_SPEND,
+    MIN_BUCKETS,
+    MAX_BUCKETS,
+    apply_default_player_distribution,
+)
+from presentation.charts import curve_svg
+from presentation.formatters import fmt
+
+
+def init_session_state():
+    ss = st.session_state
+    if "num_prizes" not in ss:
+        ss.num_prizes = 8
+    if "gamma" not in ss:
+        ss.gamma = 1.5
+    if "exp_rate" not in ss:
+        ss.exp_rate = 10
+    if "base_exp" not in ss:
+        ss.base_exp = 500
+    if "draw" not in ss:
+        ss.draw = None
+    if "show_model" not in ss:
+        ss.show_model = False
+    if "bucket_count" not in ss:
+        ss.bucket_count = 3
+    if "prize_increment" not in ss:
+        ss.prize_increment = 500
+        ss.prize_increment_inp = 500
+    if "prize_num_prizes" not in ss:
+        ss.prize_num_prizes = 3
+        ss.prize_num_prizes_inp = 3
+    if "players_initialized" not in ss:
+        apply_default_player_distribution(ss)
+        ss.players_initialized = True
+    for b in BUCKET_CATALOG:
+        bid = b["id"]
+        if f"{bid}_spend" not in ss:
+            ss[f"{bid}_spend"] = DEFAULT_SPEND[bid]
+
+
+def render_header():
+    st.markdown("""
+<div style="text-align:center;margin:0 4px 20px">
+  <h1 style="font-size:19px;font-weight:700;letter-spacing:-0.01em;margin:0;color:#ededed">
+    Raffle Prize Distribution Simulator
+  </h1>
+</div>
+""", unsafe_allow_html=True)
+
+
+def _render_bucket(ss, derived, b, compact: bool = False):
+    bid = b["id"]
+    d = derived[bid]
+
+    ring_html = (
+        f'<div class="bk-head" style="background:{b["bg"]}">'
+        f'  <span class="bk-ring" style="color:{b["ac"]}"><span style="'
+        f'    width:7px;height:7px;border-radius:50%;background:{b["ac"]};'
+        f'    display:inline-block"></span></span>'
+        f'  <span class="bk-name" style="color:{b["tx"]}">{b["name"]}</span>'
+        f'  <span class="bk-range" style="color:{b["tx"]};opacity:.8">{b["range"]}</span>'
+        f'</div>'
+    )
+    st.markdown(f'<div class="bucket">{ring_html}</div>', unsafe_allow_html=True)
+
+    if compact:
+        c1, c2, c3 = st.columns([1, 1, 1])
+        with c1:
+            st.markdown('<span class="clbl">Players</span>', unsafe_allow_html=True)
+            ss[f"{bid}_players"] = st.number_input(
+                "players", min_value=0, value=ss[f"{bid}_players"],
+                label_visibility="collapsed", key=f"{bid}_players_inp",
+            )
+        with c2:
+            st.markdown('<span class="clbl">$/player</span>', unsafe_allow_html=True)
+            ss[f"{bid}_spend"] = st.number_input(
+                "spend", min_value=0, value=ss[f"{bid}_spend"],
+                label_visibility="collapsed", key=f"{bid}_spend_inp",
+            )
+        with c3:
+            st.markdown(
+                f'<div style="padding:6px 0;text-align:center">'
+                f'  <div class="clbl">Total raffles</div>'
+                f'  <div class="dval" style="color:{b["ac"]};font-size:20px;font-weight:700">{fmt(d["total"])}</div>'
+                f'  <div class="deq" style="font-size:10px;color:#5e5e5e;font-family:monospace">'
+                f'    {fmt(ss[f"{bid}_players"])} × {fmt(d["per"])}'
+                f'  </div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+    else:
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 1.05])
+        with c1:
+            st.markdown('<span class="clbl">Player Count</span>', unsafe_allow_html=True)
+            ss[f"{bid}_players"] = st.number_input(
+                "players", min_value=0, value=ss[f"{bid}_players"],
+                label_visibility="collapsed", key=f"{bid}_players_inp",
+            )
+        with c2:
+            st.markdown('<span class="clbl">Spend Per Player ($)</span>', unsafe_allow_html=True)
+            ss[f"{bid}_spend"] = st.number_input(
+                "spend", min_value=0, value=ss[f"{bid}_spend"],
+                label_visibility="collapsed", key=f"{bid}_spend_inp",
+            )
+        with c3:
+            st.markdown(
+                f'<div style="padding:6px 0;text-align:center">'
+                f'  <div class="clbl">Raffles Per Player</div>'
+                f'  <div class="dval" style="color:{b["ac"]};font-size:26px;font-weight:700">{fmt(d["per"])}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with c4:
+            st.markdown(
+                f'<div style="padding:6px 0;text-align:center">'
+                f'  <div class="clbl">Total raffles</div>'
+                f'  <div class="dval" style="color:{b["ac"]};font-size:26px;font-weight:700">{fmt(d["total"])}</div>'
+                f'  <div class="deq" style="font-size:11px;color:#5e5e5e;font-family:monospace">'
+                f'    {fmt(ss[f"{bid}_players"])} × {fmt(d["per"])}'
+                f'  </div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(
+        "<hr style='border:none;border-top:1px solid #2c2c2c;margin:0 0 10px'>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_left_panel(ss, derived, on_run_draw, buckets):
+    kicker_col, counter_col = st.columns([5, 1])
+    with kicker_col:
+        st.markdown(
+            '<div class="kicker" style="padding-top:8px;margin-bottom:0">Player Buckets</div>',
+            unsafe_allow_html=True,
+        )
+    with counter_col:
+        btn_minus, count_mid, btn_plus = st.columns([1, 1, 1])
+        with btn_minus:
+            st.markdown('<span class="counter-btn-minus"></span>', unsafe_allow_html=True)
+            if st.button("−", key="bucket_minus", disabled=ss.bucket_count <= MIN_BUCKETS):
+                ss.bucket_count -= 1
+                apply_default_player_distribution(ss)
+                ss.draw = None
+                st.rerun()
+        with count_mid:
+            st.markdown(
+                f'<div style="text-align:center;padding-top:3px;font-size:14px;'
+                f'font-weight:700;color:#ededed">{ss.bucket_count}</div>',
+                unsafe_allow_html=True,
+            )
+        with btn_plus:
+            st.markdown('<span class="counter-btn-plus"></span>', unsafe_allow_html=True)
+            if st.button("+", key="bucket_plus", disabled=ss.bucket_count >= MAX_BUCKETS):
+                ss.bucket_count += 1
+                apply_default_player_distribution(ss)
+                ss.draw = None
+                st.rerun()
+
+    st.markdown('<div style="margin-top:12px"></div>', unsafe_allow_html=True)
+
+    compact = len(buckets) > 5
+    if compact:
+        mid = (len(buckets) + 1) // 2
+        grid_left, grid_right = st.columns(2)
+        with grid_left:
+            for b in buckets[:mid]:
+                _render_bucket(ss, derived, b, compact=True)
+        with grid_right:
+            for b in buckets[mid:]:
+                _render_bucket(ss, derived, b, compact=True)
+    else:
+        for b in buckets:
+            _render_bucket(ss, derived, b, compact=False)
+
+    st.markdown(
+        '<div style="border-top:1px solid #2c2c2c;margin-top:26px;padding-top:26px">'
+        '  <div style="display:flex;justify-content:space-between;align-items:center">'
+        '    <span class="kicker" style="margin:0">Draw Results</span>',
+        unsafe_allow_html=True,
+    )
+
+    if st.button("▶  Run Draw", key="run_draw_btn", type="primary",
+                 help="Run the Monte-Carlo prize draw"):
+        on_run_draw()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    draw = ss.draw
+    if draw is None:
+        st.markdown(
+            f'<p style="color:#5e5e5e;font-size:14px;margin-top:12px">'
+            f'Hit "Run draw" to simulate {fmt(ss.num_prizes)} prize{"s" if ss.num_prizes != 1 else ""}.'
+            f'</p>',
+            unsafe_allow_html=True,
+        )
+    else:
+        tally = {b["id"]: 0 for b in buckets}
+        for bid in draw:
+            tally[bid] += 1
+
+        bucket_map = {b["id"]: b for b in buckets}
+        chips = "".join(
+            f'<div class="prize-chip" style="border-left-color:{bucket_map[bid]["ac"]}">'
+            f'  <span class="prize-n">Prize {i+1}</span>'
+            f'  <span class="prize-win" style="color:{bucket_map[bid]["ac"]}">{bucket_map[bid]["name"]}</span>'
+            f'</div>'
+            for i, bid in enumerate(draw)
+        )
+        st.markdown(f'<div class="prize-grid">{chips}</div>', unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def _slider_label_style(active: str, name: str) -> str:
+    color = "#ededed" if active == name else "#5e5e5e"
+    weight = "600" if active == name else "400"
+    return f'<span style="color:{color};font-weight:{weight};font-size:12px">{name}</span>'
+
+
+def _sync_gamma_from_input():
+    ss = st.session_state
+    ss.gamma = round(float(ss.gamma_inp), 2)
+    ss.gamma_slider = ss.gamma
+
+
+def _sync_gamma_from_slider():
+    ss = st.session_state
+    ss.gamma = round(float(ss.gamma_slider), 2)
+    ss.gamma_inp = ss.gamma
+
+def _on_prize_increment_change():
+    ss = st.session_state
+    total = ss.get("_prize_total_money", 0)
+    val = max(1, int(ss.prize_increment_inp))
+    ss.prize_increment = val
+    ss.prize_num_prizes = max(3, math.floor(total / val)) if val > 0 else 3
+    ss.prize_num_prizes_inp = ss.prize_num_prizes
+
+
+def _on_prize_num_prizes_change():
+    ss = st.session_state
+    total = ss.get("_prize_total_money", 0)
+    n = max(3, int(ss.prize_num_prizes_inp))
+    ss.prize_num_prizes = n
+    ss.prize_increment = max(1, round(total / n)) if n > 0 and total > 0 else ss.prize_increment
+    ss.prize_increment_inp = ss.prize_increment
+
+
+def _render_prize_calculator(ss, total_money: int):
+    ss._prize_total_money = total_money
+
+    ss.setdefault("prize_increment_inp", ss.prize_increment)
+    ss.setdefault("prize_num_prizes_inp", ss.prize_num_prizes)
+
+    st.markdown('<div class="kicker" style="margin-bottom:10px">Prize Calculator</div>', unsafe_allow_html=True)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.number_input(
+            "Prize Increment ($)",
+            min_value=1,
+            key="prize_increment_inp",
+            on_change=_on_prize_increment_change,
+        )
+    with c2:
+        st.number_input(
+            "Number of Prizes",
+            min_value=3,
+            key="prize_num_prizes_inp",
+            on_change=_on_prize_num_prizes_change,
+        )
+
+    st.markdown(
+        f'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px">'
+        f'  <span style="font-size:13px;color:#7d7d7d">Raffle revenue</span>'
+        f'  <span style="font-size:16px;font-weight:700;color:#ededed">${fmt(total_money)}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<hr style="border:none;border-top:1px solid #2c2c2c;margin:18px 0">',
+        unsafe_allow_html=True,
+    )
+
+
+def render_right_panel(ss, total_money: int):
+    _render_prize_calculator(ss, total_money)
+
+    ss.setdefault("gamma_slider", float(ss.gamma))
+    ss.setdefault("gamma_inp", float(ss.gamma))
+
+    title_col, gamma_col = st.columns([2.5, 1])
+    with title_col:
+        st.markdown(
+            '<div class="kicker" style="margin-bottom:0;padding-top:6px">XP Threshold Curve</div>',
+            unsafe_allow_html=True,
+        )
+    with gamma_col:
+        st.number_input(
+            "γ",
+            min_value=0.0,
+            max_value=3.0,
+            step=0.01,
+            format="%.2f",
+            key="gamma_inp",
+            on_change=_sync_gamma_from_input,
+        )
+
+    slider_active = (
+        "Constant" if ss.gamma < 0.4 else
+        "Exponential" if ss.gamma > 2.0 else
+        "Linear"
+    )
+
+    st.markdown(
+        '<span style="font-size:17px;font-weight:600;color:#aeaeae">'
+        'EXP Threshold Curve Shape </em></span>',
+        unsafe_allow_html=True,
+    )
+
+    st.slider(
+        "γ", min_value=0.0, max_value=3.0,
+        step=0.01, label_visibility="collapsed", key="gamma_slider",
+        on_change=_sync_gamma_from_slider,
+    )
+
+    st.markdown(
+        f'<div style="display:flex;justify-content:space-between;margin-top:4px">'
+        f'  {_slider_label_style(slider_active, "Constant")}'
+        f'  {_slider_label_style(slider_active, "Linear")}'
+        f'  {_slider_label_style(slider_active, "Exponential")}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div style="text-align:center;margin:16px 0 14px">'
+        '  <div style="font-size:22px;font-weight:700;color:#ededed;'
+        '              font-family:\'Spline Sans Mono\',monospace;letter-spacing:-0.01em">'
+        '    baseEXP × n<sup style="font-size:0.75em">γ</sup>'
+        '  </div>'
+        '</div>'
+        '<div style="font-size:12.5px;color:#7d7d7d;line-height:1.65;margin-bottom:10px">'
+        '  <p style="margin:0 0 8px">'
+        '    <strong style="color:#aeaeae">baseEXP</strong> — '
+        '    The EXP threshold at level&nbsp;1; the starting cost before level scaling is applied.'
+        '  </p>'
+        '  <p style="margin:0 0 8px">'
+        '    <strong style="color:#aeaeae">n</strong> — '
+        '    The player\'s current level.'
+        '  </p>'
+        '  <p style="margin:0">'
+        '    <strong style="color:#aeaeae">γ</strong> — '
+        '    The growth exponent. Controls how quickly the EXP threshold rises each level — '
+        '    flat at&nbsp;0, linear at&nbsp;1, and increasingly steep above&nbsp;1.'
+        '  </p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    ec1, ec2, ec3 = st.columns(3)
+    with ec1:
+        ss.num_prizes = st.number_input(
+            "Prize Count", min_value=1, value=ss.num_prizes, key="prizes_input",
+        )
+    with ec2:
+        ss.exp_rate = st.number_input(
+            "EXP per $1", min_value=1, value=ss.exp_rate, key="exp_rate_inp"
+        )
+    with ec3:
+        ss.base_exp = round(st.number_input(
+            "Initial EXP Threshold",
+            min_value=0.01,
+            value=float(ss.base_exp),
+            step=0.01,
+            format="%.2f",
+            key="base_exp_inp",
+        ), 2)
+
+    st.markdown('<div class="kicker" style="margin-top:20px">EXP Cost Per Ticket Level</div>', unsafe_allow_html=True)
+    st.markdown(curve_svg(ss.gamma, ss.base_exp), unsafe_allow_html=True)
+
+
+def render_level_table(gamma: float, base_exp: float):
+    def _f(v: float) -> str:
+        if v >= 1_000_000:
+            return f"{v / 1_000_000:.2f}M"
+        if v >= 1_000:
+            return f"{v / 1_000:.1f}K"
+        return f"{v:,.1f}"
+
+    levels = list(range(1, 51))
+    costs  = [base_exp * (n ** gamma) for n in levels]
+
+    groups_html = ""
+    for g in range(5):
+        rows = "".join(
+            f'<tr><td>{levels[i]}</td><td>{_f(costs[i])}</td></tr>'
+            for i in range(g * 10, g * 10 + 10)
+        )
+        groups_html += (
+            f'<div>'
+            f'  <table class="level-table">'
+            f'    <thead><tr><th>Lvl</th><th>EXP Threshold</th></tr></thead>'
+            f'    <tbody>{rows}</tbody>'
+            f'  </table>'
+            f'</div>'
+        )
+
+    st.markdown(
+        f'<div style="border-top:1px solid #2c2c2c;margin-top:28px;padding-top:22px">'
+        f'  <div class="kicker" style="margin-bottom:14px">EXP Threshold by Level</div>'
+        f'  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:20px">'
+        f'    {groups_html}'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_pool_bar(derived, total_pool, total_players, total_money, buckets):
+    segs = "".join(
+        f'<div class="pool-seg" style="flex-grow:{max(derived[b["id"]]["share"], 0.001)};background:{b["ac"]}"></div>'
+        for b in buckets
+    )
+    legend = "".join(
+        f'<span class="pl">'
+        f'  <span class="dot" style="background:{b["ac"]}"></span>'
+        f'  {b["name"]} <b>{derived[b["id"]]["share"]*100:.1f}%</b>'
+        f'</span>'
+        for b in buckets
+    )
+    st.markdown(
+        f'<div style="border-top:1px solid #2c2c2c;margin-top:28px;padding-top:22px">'
+        f'  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'
+        f'    <span style="font-size:15px;font-weight:600;color:#aeaeae">Total ticket pool</span>'
+        f'    <div style="display:flex;gap:28px;align-items:baseline">'
+        f'      <span style="font-size:16px;font-weight:600;color:#7d7d7d">'
+        f'        {fmt(total_players)}'
+        f'        <small style="font-size:12px;font-weight:400"> players</small>'
+        f'      </span>'
+        f'      <span style="font-size:19px;font-weight:700;color:#ededed">'
+        f'        {fmt(total_pool)}'
+        f'        <small style="color:#7d7d7d;font-size:13px;font-weight:400"> raffles</small>'
+        f'      </span>'
+        f'      <span style="font-size:19px;font-weight:700;color:#ededed">'
+        f'        ${fmt(total_money)}'
+        f'        <small style="color:#7d7d7d;font-size:13px;font-weight:400"> in circulation</small>'
+        f'      </span>'
+        f'    </div>'
+        f'  </div>'
+        f'  <div class="pool-bar">{segs}</div>'
+        f'  <div class="pool-legend" style="margin-top:10px">{legend}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )

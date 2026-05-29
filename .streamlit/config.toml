@@ -1,0 +1,11 @@
+[server]
+# "poll" is more reliable than "watchdog" for Cursor/VS Code saves on macOS.
+# Watchdog often misses atomic saves; poll checks file mtimes every ~1s.
+fileWatcherType = "poll"
+runOnSave = true
+
+[runner]
+fastReruns = true
+
+[browser]
+gatherUsageStats = false

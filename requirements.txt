@@ -1,0 +1,2 @@
+streamlit>=1.28
+watchdog>=3.0
