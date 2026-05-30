@@ -24,6 +24,10 @@ def init_session_state():
         ss.base_exp = 500
     if "draw" not in ss:
         ss.draw = None
+    if "monte_carlo" not in ss:
+        ss.monte_carlo = None
+    if "monte_carlo_n" not in ss:
+        ss.monte_carlo_n = 1
     if "show_model" not in ss:
         ss.show_model = False
     if "bucket_count" not in ss:
@@ -135,7 +139,7 @@ def _render_bucket(ss, derived, b, compact: bool = False):
     )
 
 
-def render_left_panel(ss, derived, on_run_draw, buckets):
+def render_left_panel(ss, derived, on_run_draw, on_run_monte_carlo, buckets):
     kicker_col, counter_col = st.columns([5, 1])
     with kicker_col:
         st.markdown(
@@ -227,6 +231,75 @@ def render_left_panel(ss, derived, on_run_draw, buckets):
             f'  </tr></thead>'
             f'  <tbody style="border-top:1px solid #2c2c2c">{rows}</tbody>'
             f'</table>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Monte Carlo section
+    st.markdown(
+        '<div style="border-top:1px solid #2c2c2c;margin-top:26px;padding-top:26px">'
+        '  <div style="display:flex;justify-content:space-between;align-items:center">'
+        '    <span class="kicker" style="margin:0">Monte Carlo Simulation</span>',
+        unsafe_allow_html=True,
+    )
+
+    mc_col_btn, mc_col_input = st.columns([2, 1])
+    with mc_col_btn:
+        st.markdown('<span class="clbl">&nbsp;</span>', unsafe_allow_html=True)
+        if st.button("▶  Run Multi Draw", key="run_mc_btn", type="primary",
+                     help="Run the draw N times and tally results"):
+            on_run_monte_carlo()
+    with mc_col_input:
+        st.markdown('<span class="clbl">Draws</span>', unsafe_allow_html=True)
+        ss.monte_carlo_n = st.number_input(
+            "Number of draws",
+            min_value=1,
+            max_value=1000,
+            value=ss.monte_carlo_n,
+            label_visibility="collapsed",
+            key="monte_carlo_n_inp",
+        )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    mc = ss.monte_carlo
+    if mc is None:
+        st.markdown(
+            '<p style="color:#5e5e5e;font-size:14px;margin-top:12px">'
+            'Set the number of draws and hit "Run Monte Carlo" to simulate multiple prize draws.'
+            '</p>',
+            unsafe_allow_html=True,
+        )
+    else:
+        total_wins = sum(mc.values())
+        mc_rows = "".join(
+            f'<tr>'
+            f'  <td style="display:flex;align-items:center;gap:8px;padding:7px 0">'
+            f'    <span style="width:9px;height:9px;border-radius:50%;background:{b["ac"]};flex-shrink:0;display:inline-block"></span>'
+            f'    <span style="color:#aeaeae;font-size:13px">{b["name"]}</span>'
+            f'  </td>'
+            f'  <td style="text-align:right;padding:7px 0;font-size:14px;font-weight:700;color:{b["ac"]}">'
+            f'    {mc[b["id"]]}'
+            f'  </td>'
+            f'  <td style="text-align:right;padding:7px 0;font-size:12px;color:#5e5e5e;font-family:monospace">'
+            f'    {mc[b["id"]] / total_wins * 100:.1f}%'
+            f'  </td>'
+            f'</tr>'
+            for b in buckets if mc[b["id"]] > 0
+        )
+        st.markdown(
+            f'<table style="width:100%;border-collapse:collapse;margin-top:10px">'
+            f'  <thead><tr>'
+            f'    <th style="text-align:left;font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5e5e5e;padding-bottom:6px">Bucket</th>'
+            f'    <th style="text-align:right;font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5e5e5e;padding-bottom:6px">Total Wins</th>'
+            f'    <th style="text-align:right;font-size:10.5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#5e5e5e;padding-bottom:6px">Win %</th>'
+            f'  </tr></thead>'
+            f'  <tbody style="border-top:1px solid #2c2c2c">{mc_rows}</tbody>'
+            f'</table>'
+            f'<p style="color:#5e5e5e;font-size:11px;margin-top:8px">'
+            f'  {ss.monte_carlo_n} draw{"s" if ss.monte_carlo_n != 1 else ""} × {fmt(ss.prize_num_prizes)} prizes = {fmt(total_wins)} total wins'
+            f'</p>',
             unsafe_allow_html=True,
         )
 

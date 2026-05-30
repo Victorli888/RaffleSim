@@ -3,7 +3,7 @@ import random
 import pytest
 
 from model.economy import raffles_for_budget, compute_derived, compute_total_money
-from model.simulation import run_draw
+from model.simulation import run_draw, run_monte_carlo
 from model.constants import (
     get_active_buckets,
     distribute_players,
@@ -457,3 +457,80 @@ class TestRunDraw:
         result = run_draw(derived, num_prizes=100, buckets=buckets)
         shrimp_wins = result.count("shrimp")
         assert 80 <= shrimp_wins <= 98  # expected ~90, wide tolerance for randomness
+
+
+# ---------------------------------------------------------------------------
+# run_monte_carlo (multi draw)
+# ---------------------------------------------------------------------------
+
+class TestRunMonteCarlo:
+
+    def _derived(self, totals: dict[str, int], buckets):
+        total_pool = sum(totals.values())
+        return {
+            b["id"]: {
+                "total": totals[b["id"]],
+                "per": 1,
+                "share": totals[b["id"]] / total_pool if total_pool else 0,
+            }
+            for b in buckets
+        }
+
+    def test_total_wins_equals_cycles_times_prizes(self):
+        buckets = get_active_buckets(3)
+        derived = self._derived({"shrimp": 300, "minnow": 600, "whale": 100}, buckets)
+        n_cycles, num_prizes = 100, 8
+        tally = run_monte_carlo(derived, num_prizes, buckets, n_cycles)
+        assert sum(tally.values()) == n_cycles * num_prizes
+
+    def test_each_cycle_capped_when_prizes_exceed_pool(self):
+        buckets = get_active_buckets(3)
+        derived = self._derived({"shrimp": 2, "minnow": 2, "whale": 1}, buckets)
+        n_cycles, num_prizes = 10, 100
+        tally = run_monte_carlo(derived, num_prizes, buckets, n_cycles)
+        assert sum(tally.values()) == n_cycles * 5  # pool has 5 tickets per draw
+
+    def test_empty_pool_yields_zero_tally(self):
+        buckets = get_active_buckets(3)
+        derived = self._derived({"shrimp": 0, "minnow": 0, "whale": 0}, buckets)
+        tally = run_monte_carlo(derived, num_prizes=5, buckets=buckets, n_cycles=50)
+        assert tally == {b["id"]: 0 for b in buckets}
+
+    def test_zero_cycles_yields_zero_tally(self):
+        buckets = get_active_buckets(3)
+        derived = self._derived({"shrimp": 100, "minnow": 100, "whale": 100}, buckets)
+        tally = run_monte_carlo(derived, num_prizes=5, buckets=buckets, n_cycles=0)
+        assert tally == {b["id"]: 0 for b in buckets}
+
+    def test_bucket_with_zero_tickets_never_wins(self):
+        buckets = get_active_buckets(3)
+        derived = self._derived({"shrimp": 0, "minnow": 500, "whale": 0}, buckets)
+        tally = run_monte_carlo(derived, num_prizes=10, buckets=buckets, n_cycles=20)
+        assert tally["shrimp"] == 0
+        assert tally["whale"] == 0
+        assert tally["minnow"] == 200
+
+    def test_calls_run_draw_once_per_cycle(self):
+        from unittest.mock import patch
+
+        buckets = get_active_buckets(3)
+        derived = self._derived({"shrimp": 10, "minnow": 10, "whale": 10}, buckets)
+        with patch("model.simulation.run_draw") as mock_draw:
+            mock_draw.side_effect = [
+                ["shrimp", "whale"],
+                ["minnow"],
+                ["shrimp", "shrimp", "whale"],
+            ]
+            tally = run_monte_carlo(derived, num_prizes=3, buckets=buckets, n_cycles=3)
+
+        assert mock_draw.call_count == 3
+        assert tally == {"shrimp": 3, "minnow": 1, "whale": 2}
+
+    def test_win_share_roughly_matches_pool_share(self):
+        random.seed(42)
+        buckets = get_active_buckets(3)
+        derived = self._derived({"shrimp": 900, "minnow": 0, "whale": 100}, buckets)
+        tally = run_monte_carlo(derived, num_prizes=10, buckets=buckets, n_cycles=500)
+        total = sum(tally.values())
+        shrimp_pct = tally["shrimp"] / total * 100
+        assert 85 <= shrimp_pct <= 95  # pool share is 90%

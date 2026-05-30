@@ -1,7 +1,7 @@
 import math
 import streamlit as st
 
-from model import get_active_buckets, compute_derived, compute_total_money, run_draw
+from model import get_active_buckets, compute_derived, compute_total_money, run_draw, run_monte_carlo
 from presentation import CSS, init_session_state, render_header, render_left_panel, render_right_panel, render_pool_bar, render_level_table
 
 st.set_page_config(
@@ -41,12 +41,17 @@ def handle_run_draw():
     ss.draw = run_draw(derived, ss.prize_num_prizes, buckets)
 
 
+def handle_run_monte_carlo():
+    n = max(1, min(1000, ss.get("monte_carlo_n", 1)))
+    ss.monte_carlo = run_monte_carlo(derived, ss.prize_num_prizes, buckets, n)
+
+
 render_header()
 
 left, _, right = st.columns([1.18, 0.15, 1], gap="small")
 
 with left:
-    render_left_panel(ss, derived, handle_run_draw, buckets)
+    render_left_panel(ss, derived, handle_run_draw, handle_run_monte_carlo, buckets)
 
 with right:
     render_right_panel(ss, total_money)
