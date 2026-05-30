@@ -154,6 +154,7 @@ def render_left_panel(ss, derived, on_run_draw, on_run_multi_draw, buckets):
                 ss.bucket_count = max(MIN_BUCKETS, ss.bucket_count - 1)
                 apply_default_player_distribution(ss)
                 ss.draw = None
+                ss.multi_draw = None
                 st.rerun()
         with count_mid:
             st.markdown(
@@ -167,6 +168,7 @@ def render_left_panel(ss, derived, on_run_draw, on_run_multi_draw, buckets):
                 ss.bucket_count = min(MAX_BUCKETS, ss.bucket_count + 1)
                 apply_default_player_distribution(ss)
                 ss.draw = None
+                ss.multi_draw = None
                 st.rerun()
 
     st.markdown('<div style="margin-top:12px"></div>', unsafe_allow_html=True)
