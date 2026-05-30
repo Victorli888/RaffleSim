@@ -24,10 +24,10 @@ def init_session_state():
         ss.base_exp = 500
     if "draw" not in ss:
         ss.draw = None
-    if "monte_carlo" not in ss:
-        ss.monte_carlo = None
-    if "monte_carlo_n" not in ss:
-        ss.monte_carlo_n = 1
+    if "multi_draw" not in ss:
+        ss.multi_draw = None
+    if "multi_draw_n" not in ss:
+        ss.multi_draw_n = 1
     if "show_model" not in ss:
         ss.show_model = False
     if "bucket_count" not in ss:
@@ -139,7 +139,7 @@ def _render_bucket(ss, derived, b, compact: bool = False):
     )
 
 
-def render_left_panel(ss, derived, on_run_draw, on_run_monte_carlo, buckets):
+def render_left_panel(ss, derived, on_run_draw, on_run_multi_draw, buckets):
     kicker_col, counter_col = st.columns([5, 1])
     with kicker_col:
         st.markdown(
@@ -236,11 +236,11 @@ def render_left_panel(ss, derived, on_run_draw, on_run_monte_carlo, buckets):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Monte Carlo section
+    # Multi Draw section
     st.markdown(
         '<div style="border-top:1px solid #2c2c2c;margin-top:26px;padding-top:26px">'
         '  <div style="display:flex;justify-content:space-between;align-items:center">'
-        '    <span class="kicker" style="margin:0">Monte Carlo Simulation</span>',
+        '    <span class="kicker" style="margin:0">Multi Draw Simulation</span>',
         unsafe_allow_html=True,
     )
 
@@ -249,25 +249,25 @@ def render_left_panel(ss, derived, on_run_draw, on_run_monte_carlo, buckets):
         st.markdown('<span class="clbl">&nbsp;</span>', unsafe_allow_html=True)
         if st.button("▶  Run Multi Draw", key="run_mc_btn", type="primary",
                      help="Run the draw N times and tally results"):
-            on_run_monte_carlo()
+            on_run_multi_draw()
     with mc_col_input:
         st.markdown('<span class="clbl">Draws</span>', unsafe_allow_html=True)
-        ss.monte_carlo_n = st.number_input(
+        ss.multi_draw_n = st.number_input(
             "Number of draws",
             min_value=1,
             max_value=1000,
-            value=ss.monte_carlo_n,
+            value=ss.multi_draw_n,
             label_visibility="collapsed",
-            key="monte_carlo_n_inp",
+            key="multi_draw_n_inp",
         )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    mc = ss.monte_carlo
+    mc = ss.multi_draw
     if mc is None:
         st.markdown(
             '<p style="color:#5e5e5e;font-size:14px;margin-top:12px">'
-            'Set the number of draws and hit "Run Monte Carlo" to simulate multiple prize draws.'
+            'Set the number of draws and hit "Run Multi Draw" to simulate multiple prize draws.'
             '</p>',
             unsafe_allow_html=True,
         )
@@ -298,7 +298,7 @@ def render_left_panel(ss, derived, on_run_draw, on_run_monte_carlo, buckets):
             f'  <tbody style="border-top:1px solid #2c2c2c">{mc_rows}</tbody>'
             f'</table>'
             f'<p style="color:#5e5e5e;font-size:11px;margin-top:8px">'
-            f'  {ss.monte_carlo_n} draw{"s" if ss.monte_carlo_n != 1 else ""} × {fmt(ss.prize_num_prizes)} prizes = {fmt(total_wins)} total wins'
+            f'  {ss.multi_draw_n} draw{"s" if ss.multi_draw_n != 1 else ""} × {fmt(ss.prize_num_prizes)} prizes = {fmt(total_wins)} total wins'
             f'</p>',
             unsafe_allow_html=True,
         )

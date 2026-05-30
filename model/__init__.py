@@ -11,7 +11,7 @@ from model.constants import (
     get_active_buckets,
 )
 from model.economy import compute_derived, compute_total_money, raffles_for_budget
-from model.simulation import run_draw, run_monte_carlo
+from model.simulation import run_draw, run_multi_draw
 
 __all__ = [
     "BUCKET_CATALOG",
@@ -28,5 +28,5 @@ __all__ = [
     "compute_total_money",
     "raffles_for_budget",
     "run_draw",
-    "run_monte_carlo",
+    "run_multi_draw",
 ]

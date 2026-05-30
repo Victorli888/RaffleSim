@@ -15,7 +15,7 @@ def run_draw(derived: dict[str, dict], num_prizes: int, buckets: list[dict]) -> 
     return results
 
 
-def run_monte_carlo(derived: dict[str, dict], num_prizes: int, buckets: list[dict], n_cycles: int) -> dict[str, int]:
+def run_multi_draw(derived: dict[str, dict], num_prizes: int, buckets: list[dict], n_cycles: int) -> dict[str, int]:
     tally = {b["id"]: 0 for b in buckets}
     for _ in range(n_cycles):
         for bid in run_draw(derived, num_prizes, buckets):
