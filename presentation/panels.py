@@ -147,7 +147,7 @@ def render_left_panel(ss, derived, on_run_draw, buckets):
         with btn_minus:
             st.markdown('<span class="counter-btn-minus"></span>', unsafe_allow_html=True)
             if st.button("−", key="bucket_minus", disabled=ss.bucket_count <= MIN_BUCKETS):
-                ss.bucket_count -= 1
+                ss.bucket_count = max(MIN_BUCKETS, ss.bucket_count - 1)
                 apply_default_player_distribution(ss)
                 ss.draw = None
                 st.rerun()
@@ -160,7 +160,7 @@ def render_left_panel(ss, derived, on_run_draw, buckets):
         with btn_plus:
             st.markdown('<span class="counter-btn-plus"></span>', unsafe_allow_html=True)
             if st.button("+", key="bucket_plus", disabled=ss.bucket_count >= MAX_BUCKETS):
-                ss.bucket_count += 1
+                ss.bucket_count = min(MAX_BUCKETS, ss.bucket_count + 1)
                 apply_default_player_distribution(ss)
                 ss.draw = None
                 st.rerun()

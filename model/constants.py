@@ -59,6 +59,7 @@ def distribute_players(
     bucket_count: int,
     total: int = DEFAULT_TOTAL_PLAYERS,
 ) -> dict[str, int]:
+    bucket_count = max(MIN_BUCKETS, min(MAX_BUCKETS, bucket_count))
     buckets = get_active_buckets(bucket_count)
     shares = PLAYER_SHARE_BY_COUNT[bucket_count]
     if len(shares) != len(buckets):
