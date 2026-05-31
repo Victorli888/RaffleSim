@@ -56,5 +56,5 @@ with left:
 with right:
     render_right_panel(ss, total_money)
 
-render_pool_bar(derived, total_pool, total_players, total_money, buckets)
+render_pool_bar(derived, total_pool, total_players, total_money, buckets, players, spends)
 render_level_table(ss.gamma, ss.base_exp)

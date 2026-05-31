@@ -79,10 +79,18 @@ html, body, [data-testid="stAppViewContainer"] {
   font-family: "Spline Sans Mono", monospace; margin-top: 2px;
 }
 .pool-bar {
-  height: 12px; border-radius: 7px; background: var(--inset);
+  height: 28px; border-radius: 7px; background: var(--inset);
   display: flex; gap: 3px; overflow: hidden; margin: 8px 0;
 }
-.pool-seg { height: 100%; border-radius: 3px; transition: flex-grow .35s ease; }
+.pool-seg {
+  height: 100%; border-radius: 3px; transition: flex-grow .35s ease;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.pool-seg-lbl {
+  font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.85);
+  font-family: "Spline Sans Mono", monospace; white-space: nowrap;
+  padding: 0 5px; overflow: hidden; text-overflow: ellipsis;
+}
 .pool-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; }
 .pl { font-size: 13px; color: var(--tx-2); display: flex; align-items: center; gap: 5px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }

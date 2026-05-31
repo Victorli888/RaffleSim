@@ -9,7 +9,7 @@ from model.constants import (
     apply_default_player_distribution,
 )
 from presentation.charts import curve_svg
-from presentation.formatters import fmt
+from presentation.formatters import fmt, fmt_k
 
 
 def init_session_state():
@@ -521,9 +521,11 @@ def render_level_table(gamma: float, base_exp: float):
     )
 
 
-def render_pool_bar(derived, total_pool, total_players, total_money, buckets):
+def render_pool_bar(derived, total_pool, total_players, total_money, buckets, players, spends):
     segs = "".join(
-        f'<div class="pool-seg" style="flex-grow:{max(derived[b["id"]]["share"], 0.001)};background:{b["ac"]}"></div>'
+        f'<div class="pool-seg" style="flex-grow:{max(derived[b["id"]]["share"], 0.001)};background:{b["ac"]}">'
+        f'  <span class="pool-seg-lbl">{fmt(derived[b["id"]]["total"])}</span>'
+        f'</div>'
         for b in buckets
     )
     legend = "".join(
@@ -533,6 +535,27 @@ def render_pool_bar(derived, total_pool, total_players, total_money, buckets):
         f'</span>'
         for b in buckets
     )
+
+    spend_per_bucket = {b["id"]: players[b["id"]] * spends[b["id"]] for b in buckets}
+    if total_money > 0:
+        spend_segs = "".join(
+            f'<div class="pool-seg" style="flex-grow:{max(spend_per_bucket[b["id"]] / total_money, 0.001)};background:{b["ac"]}">'
+            f'  <span class="pool-seg-lbl">{fmt_k(spend_per_bucket[b["id"]])}</span>'
+            f'</div>'
+            for b in buckets
+        )
+        spend_legend = "".join(
+            f'<span class="pl">'
+            f'  <span class="dot" style="background:{b["ac"]}"></span>'
+            f'  {b["name"]} <b>{spend_per_bucket[b["id"]] / total_money * 100:.1f}%</b>'
+            f'  <span style="color:#5e5e5e;font-size:11px">{fmt_k(spend_per_bucket[b["id"]])}</span>'
+            f'</span>'
+            for b in buckets
+        )
+    else:
+        spend_segs = ""
+        spend_legend = ""
+
     st.markdown(
         f'<div style="border-top:1px solid #2c2c2c;margin-top:28px;padding-top:22px">'
         f'  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'
@@ -554,6 +577,15 @@ def render_pool_bar(derived, total_pool, total_players, total_money, buckets):
         f'  </div>'
         f'  <div class="pool-bar">{segs}</div>'
         f'  <div class="pool-legend" style="margin-top:10px">{legend}</div>'
+        f'  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:20px;margin-bottom:12px">'
+        f'    <span style="font-size:15px;font-weight:600;color:#aeaeae">Spending share</span>'
+        f'    <span style="font-size:16px;font-weight:600;color:#7d7d7d">'
+        f'      ${fmt(total_money)}'
+        f'      <small style="font-size:12px;font-weight:400"> total spend</small>'
+        f'    </span>'
+        f'  </div>'
+        f'  <div class="pool-bar">{spend_segs}</div>'
+        f'  <div class="pool-legend" style="margin-top:10px">{spend_legend}</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
